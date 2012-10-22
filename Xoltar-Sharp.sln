@@ -1,0 +1,33 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Express 2012 for Web
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Xoltar.Core", "Xoltar.Core\Xoltar.Core.fsproj", "{5E7440B3-0716-46B6-93B1-48AA3D0B1A7B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{63D7A2CE-0BE8-4E3D-AF7F-91962625D125}"
+	ProjectSection(SolutionItems) = preProject
+		.nuget\NuGet.Config = .nuget\NuGet.Config
+		.nuget\NuGet.exe = .nuget\NuGet.exe
+		.nuget\NuGet.targets = .nuget\NuGet.targets
+	EndProjectSection
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Xoltar.Core.Test", "Xoltar.Core.Test\Xoltar.Core.Test.fsproj", "{FAACD970-DE96-4405-A1BE-15AE84EB2C34}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5E7440B3-0716-46B6-93B1-48AA3D0B1A7B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E7440B3-0716-46B6-93B1-48AA3D0B1A7B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E7440B3-0716-46B6-93B1-48AA3D0B1A7B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E7440B3-0716-46B6-93B1-48AA3D0B1A7B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FAACD970-DE96-4405-A1BE-15AE84EB2C34}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FAACD970-DE96-4405-A1BE-15AE84EB2C34}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FAACD970-DE96-4405-A1BE-15AE84EB2C34}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FAACD970-DE96-4405-A1BE-15AE84EB2C34}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
