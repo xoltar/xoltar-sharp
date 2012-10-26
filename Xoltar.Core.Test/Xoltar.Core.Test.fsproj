@@ -21,6 +21,9 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Debug\Xoltar.Core.Test.XML</DocumentationFile>
+    <StartAction>Program</StartAction>
+    <StartProgram>C:\Users\Brynshu\Documents\GitHub\xoltar-sharp\packages\xunit.runners.1.9.1\tools\xunit.console.clr4.exe</StartProgram>
+    <StartArguments>C:\Users\Brynshu\Documents\GitHub\xoltar-sharp\Xoltar.Core.Test\bin\Debug\Xoltar.Core.Test.dll /wait /trait "runthis=yes"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>

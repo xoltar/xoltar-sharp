@@ -86,8 +86,26 @@ module Dictionary =
         )
         Assert.Equal(2, d.[1])
 
-    [<Fact>]
+    [<Fact>][<Trait("runthis","yes")>]
     let ``after commit, transaction values persist``()= 
+        let d,back = trans()
+        d.[1] <- 2
+        Assert.Null System.Transactions.Transaction.Current
+        using (new System.Transactions.TransactionScope()) (fun txn ->
+            d.[1] <- 5
+            printfn "Calling txn.Complete"
+            txn.Complete()
+            printfn "Done txn.Complete"
+        )
+        printfn "After dispose"
+        System.Threading.Thread.Sleep(1000)
+        Assert.Null System.Transactions.Transaction.Current
+        let result = d.[1]
+        printfn "Result obtained"
+        Assert.Equal(5, result)
+
+    [<Fact>]
+    let ``after commit, transaction values persist to the backing store``()= 
         let d,back = trans()
         d.[1] <- 2
         use txn = new System.Transactions.TransactionScope()
@@ -96,7 +114,7 @@ module Dictionary =
             txn.Complete()
         )
         Assert.Equal(5, back.[1])
-
+    
     [<Fact>]
     let ``last commit wins``() = 
         use valueSet = slim false 
