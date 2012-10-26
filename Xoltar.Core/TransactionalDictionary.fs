@@ -6,7 +6,14 @@ open Microsoft.FSharp.Linq
 open System.Transactions
 open System.Threading
 
-type TransactionValues<'TKey,'TValue
+///<summary>A helper class for TransactionalDictionary</summary>
+///TransactionValues is an IDictionary<,> that keeps track of what
+///keys and values have been added and removed. Each TransactionalValues
+///instance is associated with a single transaction, and when the transaction
+///commits, this class will update the "backing store" that was initially
+///passed to its constructor with the changes that have happened during the
+///transaction.
+type internal TransactionValues<'TKey,'TValue
                         when 'TKey: equality
                          and 'TValue: equality>
                          (backingStore:IDictionary<'TKey, 'TValue>,
@@ -20,12 +27,22 @@ type TransactionValues<'TKey,'TValue
         txn.EnlistVolatile(this, EnlistmentOptions.None) |> ignore
         txn
 
+    //We store the changes that happen during the transaction as a Dictionary<'TKey, 'TValue option>.
+    //A value of (Some v) means that v was put in the dictionary for the given key, whereas a value
+    //of None means the key was removed from the dictionary. No keys or values will be present
+    //in this dictionary for keys in the backing store that have not been modified during the transaction.
     let transactionValues = 
         if backingStore.IsReadOnly then
             raise (System.ArgumentException("Source dictionary is ReadOnly"))
         new Dictionary<'TKey, 'TValue option>()
 
+    //The undo data needed to undo changes if a rollback happens during 
+    //a 2-phase commit. Generated during the IEnlistmentNotification.Prepare method.
     let mutable undo:seq<'TKey * 'TValue option> = Seq.empty
+
+    //Tracks whether the Prepare method has been run or not. Under some circumstances,
+    //Commit can be called without calling Prepare first, so Commit has to be be
+    //able to do the work of Prepare as well.
     let mutable prepared = false
 
     let updateWithPair (dictionary:IDictionary<'a,'b>) (kv:'a * 'b option) =
@@ -146,7 +163,10 @@ type TransactionValues<'TKey,'TValue
 ///until it is committed.
 ///
 ///This dictionary, like System.Collections.Generic.Dictionary, is not thread safe,
-///it can only be safely used by a single thread at a time.
+///except that a thread that is in a transaction may safely use the it as the same time
+///as another thread in a different transaction. Two threads in the same transaction,
+///or threads that are not in a transaction, can cause the same kinds of issues that 
+///arise with multithreaded use of System.Collections.Generic.Dictionary.
 type TransactionalDictionary<'TKey, 'TValue 
         when 'TKey:equality
          and 'TValue: equality> 
@@ -159,19 +179,18 @@ type TransactionalDictionary<'TKey, 'TValue
         if txn = null then
             backingStore
         else
-            let (containsKey,value) = lock sync (fun () -> transactions.TryGetValue txn)
-            let dict = 
-                match (containsKey,value) with
-                | true, v -> v 
-                | false, _ -> txn.TransactionCompleted.Add
-                                        (fun e -> transactionLock.Lock(txn) |> ignore)
-                              let v = TransactionValues<'TKey, 'TValue>(
-                                        backingStore, 
-                                        (fun () -> transactionLock.Lock(txn)),
-                                        (fun () -> transactionLock.Unlock |> ignore
-                                                   lock sync (fun () -> transactions.Remove txn |> ignore)))
-                              transactions.[txn] <- v
-                              v
+            let dict = lock sync (fun () ->
+                                    let (containsKey,value) = transactions.TryGetValue txn
+                                    match (containsKey,value) with
+                                    | true, v -> v 
+                                    | false, _ -> 
+                                        let v = TransactionValues<'TKey, 'TValue>(
+                                                            backingStore, 
+                                                            (fun () -> transactionLock.Lock(txn)),
+                                                            (fun () -> transactionLock.Unlock |> ignore
+                                                                       lock sync (fun () -> transactions.Remove txn |> ignore)))
+                                        transactions.[txn] <- v
+                                        v)
             dict :> IDictionary<'TKey,'TValue>
     let rec getTxnValues () = getValues (Transaction.Current)
                       

@@ -2,6 +2,7 @@
 open Xunit
 open Xoltar.Core.Transaction
 open System.Collections.Generic
+open System.Transactions
 
 module Dictionary =
     let dict () = Dictionary()
@@ -33,6 +34,34 @@ module Dictionary =
         d.[1] <- 2
         d.Remove(1) |> ignore
         Assert.Equal(0, d.Count)
+
+    [<Fact>]
+    let ``iterating works outside a transaction``() =
+        let d,back = trans()
+        d.[1] <- 2
+        d.[2] <- 3
+        Assert.Equal(5, d.Values |> Seq.sum )
+        Assert.Equal(2, d.Values |> Seq.length )
+        
+    [<Fact>]
+    let ``iterating works inside a transaction``() =
+        let d,back = trans()
+        d.[1] <- 2
+        using (new TransactionScope()) (fun txn ->
+            d.[2] <- 3
+            Assert.Equal(5, d.Values |> Seq.sum )
+            Assert.Equal(2, d.Values |> Seq.length )
+        )
+
+    [<Fact>]
+    let ``iterating keys works inside a transaction``() =
+        let d,back = trans()
+        d.[1] <- 2
+        using (new TransactionScope()) (fun txn ->
+            d.[2] <- 3
+            Assert.Equal(3, d.Keys |> Seq.sum )
+            Assert.Equal(2, d.Keys |> Seq.length )
+        )
 
     [<Fact>]
     let ``values in a transaction are isolated``() = 
