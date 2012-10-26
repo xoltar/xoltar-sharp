@@ -17,8 +17,7 @@ type TransactionValues<'TKey,'TValue
         if txn = null then 
             let msg = "TransactionValues can only be created in the context of an open transaction"
             raise (System.InvalidOperationException(msg))
-        txn.EnlistVolatile(this :> IEnlistmentNotification, 
-            System.Transactions.EnlistmentOptions.None) |> ignore
+        txn.EnlistVolatile(this, EnlistmentOptions.None) |> ignore
         txn
 
     let transactionValues = 
@@ -26,29 +25,24 @@ type TransactionValues<'TKey,'TValue
             raise (System.ArgumentException("Source dictionary is ReadOnly"))
         new Dictionary<'TKey, 'TValue option>()
 
-    let mutable undo:seq<KeyValuePair<'TKey,'TValue option>> = Seq.empty
+    let mutable undo:seq<'TKey * 'TValue option> = Seq.empty
     let mutable prepared = false
 
-    let remove key = transactionValues.[key] <- None
-
-    let applyKv (dictionary:IDictionary<'a,'b>) (kv:KeyValuePair<'a,'b option>) =
-        match kv.Value with
+    let updateWithPair (dictionary:IDictionary<'a,'b>) (kv:'a * 'b option) =
+        let (k,value) = kv
+        match value with
         | Some v -> 
-            printfn "Setting %A to %A" kv.Key v
-            dictionary.[kv.Key] <- v
+            dictionary.[k] <- v
         | None -> 
-            printfn "Removing %A" kv.Key
-            dictionary.Remove kv.Key |> ignore
+            dictionary.Remove k |> ignore
 
-    let kvp k v = KeyValuePair(k,v)
-
-    let update (dictionary:IDictionary<'a,'b>) : seq<KeyValuePair<'a,'b option>> =
+    let update (dictionary:IDictionary<'TKey,'TValue>) : seq<'TKey*'TValue option> =
         let undo = seq {
                         for kv in transactionValues do
                             let (has,old) = dictionary.TryGetValue(kv.Key)
-                            applyKv dictionary kv
-                            yield kvp kv.Key (if has then Some old else None)
-                            } |> Array.ofSeq |> Seq.ofArray
+                            updateWithPair dictionary (kv.Key, kv.Value)
+                            yield kv.Key, (if has then Some old else None)
+                            } |> List.ofSeq :> seq<'TKey *'TValue option>
         undo
 
     let prep() = lockStore()
@@ -83,7 +77,8 @@ type TransactionValues<'TKey,'TValue
         member this.GetEnumerator() = current().GetEnumerator()
         member this.Clear () =
             let keys = current() |> Seq.map (fun kv -> kv.Key) |> Array.ofSeq
-            keys |> Seq.iter remove
+            for key in keys do
+                transactionValues.[key] <- None
         member this.Add(kv) = 
             transactionValues.[kv.Key] <- Some (kv.Value)
         member this.Contains(kv) = 
@@ -125,24 +120,20 @@ type TransactionValues<'TKey,'TValue
     interface System.Transactions.IEnlistmentNotification
         with
         member this.Commit(enlistment) = 
-            System.Console.WriteLine "Commit"
             if not prepared then
                 prep()
             finished()
-            System.Console.WriteLine "Committed"
             enlistment.Done()
         member this.InDoubt(enlistment) = 
-            System.Console.WriteLine "In doubt"
             enlistment.Done()
         member this.Prepare(enlistment) = 
-            System.Console.WriteLine "Prepare"
-            prep()
-            System.Console.WriteLine "Prepared"
-            enlistment.Prepared()
+            try 
+                prep()
+                enlistment.Prepared()
+            with e -> enlistment.ForceRollback(e)
         member this.Rollback(enlistment) = 
-            System.Console.WriteLine "Rollback"
             for kv in undo do
-                applyKv backingStore kv
+                updateWithPair backingStore kv
             undo <- Seq.empty
             finished()
             enlistment.Done()
@@ -164,7 +155,6 @@ type TransactionalDictionary<'TKey, 'TValue
     let transactions = new Dictionary<Transaction,TransactionValues<'TKey, 'TValue>>()
     let sync = obj()
     let transactionLock = new TransactionLock()
-    let [<VolatileField>]mutable inconsistent = false
     let getValues txn : IDictionary<'TKey, 'TValue> = 
         if txn = null then
             backingStore
@@ -174,38 +164,16 @@ type TransactionalDictionary<'TKey, 'TValue
                 match (containsKey,value) with
                 | true, v -> v 
                 | false, _ -> txn.TransactionCompleted.Add
-                                        (fun e -> System.Console.WriteLine "Completed event"
-                                                  transactionLock.Lock(txn) |> ignore
-                                                  inconsistent <- false)
+                                        (fun e -> transactionLock.Lock(txn) |> ignore)
                               let v = TransactionValues<'TKey, 'TValue>(
                                         backingStore, 
-                                        (fun () -> System.Console.WriteLine "Starting"
-                                                   transactionLock.Lock(txn)
-                                                   System.Console.WriteLine "Locked"
-                                                   inconsistent <- false),
-                                        (fun () -> 
-                                                   System.Console.WriteLine "Finishing"
-                                                   inconsistent <- false
-                                                   transactionLock.Unlock |> ignore
-                                                   System.Console.WriteLine "Unlocked"
-                                                   lock sync (fun () -> transactions.Remove txn |> ignore)
-                                                   ))
+                                        (fun () -> transactionLock.Lock(txn)),
+                                        (fun () -> transactionLock.Unlock |> ignore
+                                                   lock sync (fun () -> transactions.Remove txn |> ignore)))
                               transactions.[txn] <- v
                               v
             dict :> IDictionary<'TKey,'TValue>
-    let rec getTxnValues () = printfn "getTxnValues on thread %s" Thread.CurrentThread.Name
-                              let txn = try Some (Transaction.Current)
-                                        with :? System.InvalidOperationException -> None
-                              let now = System.DateTime.Now
-                              match txn with
-                              | None -> printfn "Txn already completed at %A" now
-                                        inconsistent <- true
-                                        while inconsistent do
-                                            Thread.Sleep(10)
-                                        let finish= System.DateTime.Now.Subtract(now).TotalMilliseconds
-                                        printfn "Done with sleep after %A ms" finish
-                                        getValues null
-                              | Some v -> getValues v
+    let rec getTxnValues () = getValues (Transaction.Current)
                       
     interface IDictionary<'TKey,'TValue>
         with

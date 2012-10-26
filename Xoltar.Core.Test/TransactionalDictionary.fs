@@ -70,8 +70,7 @@ module Dictionary =
     let ``after rollback, transaction values are not committed``()= 
         let d,back = trans()
         d.[1] <- 2
-        use txn = new System.Transactions.TransactionScope()
-        (
+        using(new System.Transactions.TransactionScope()) (fun txn ->
             d.[1] <- 5
         )
         Assert.Equal(2, back.[1])
@@ -80,8 +79,7 @@ module Dictionary =
     let ``after rollback, transaction values are gone in trans dict``()= 
         let d,back = trans()
         d.[1] <- 2
-        use txn = new System.Transactions.TransactionScope()
-        (
+        using(new System.Transactions.TransactionScope()) (fun txn ->
             d.[1] <- 5
         )
         Assert.Equal(2, d.[1])
@@ -93,23 +91,30 @@ module Dictionary =
         Assert.Null System.Transactions.Transaction.Current
         using (new System.Transactions.TransactionScope()) (fun txn ->
             d.[1] <- 5
-            printfn "Calling txn.Complete"
             txn.Complete()
-            printfn "Done txn.Complete"
         )
-        printfn "After dispose"
-        System.Threading.Thread.Sleep(1000)
-        Assert.Null System.Transactions.Transaction.Current
         let result = d.[1]
-        printfn "Result obtained"
         Assert.Equal(5, result)
 
+    [<Fact(Skip = "Demonstrates bug in F# use statement")>]
+    let ``after commit, transaction values persist (using F# 'use' statement)``()= 
+        let d,back = trans()
+        d.[1] <- 2
+        Assert.Null System.Transactions.Transaction.Current
+        use txn = new System.Transactions.TransactionScope() 
+        (
+            d.[1] <- 5
+            txn.Complete()
+        )
+        
+        let result = d.[1]
+        Assert.Equal(5, result)
+        
     [<Fact>]
     let ``after commit, transaction values persist to the backing store``()= 
         let d,back = trans()
         d.[1] <- 2
-        use txn = new System.Transactions.TransactionScope()
-        (
+        using (new System.Transactions.TransactionScope()) (fun txn ->
             d.[1] <- 5
             txn.Complete()
         )
@@ -129,8 +134,7 @@ module Dictionary =
                             Assert.Equal(2, d.[1])
                         finally
                             valueChecked.Set())
-            use txn = new System.Transactions.TransactionScope()
-            (
+            using(new System.Transactions.TransactionScope()) (fun txn ->
                 d.[1] <- 5
                 valueSet.Set()
                 valueChecked.Wait()

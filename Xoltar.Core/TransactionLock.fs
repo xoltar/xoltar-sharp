@@ -3,7 +3,7 @@ open System.Collections.Generic
 open System.Transactions
 open System.Threading
 
-//inspired by Juval Lowy's transaction lock at http://msdn.microsoft.com/en-us/magazine/cc163688.aspx
+//Based on Juval Lowy's transaction lock at http://msdn.microsoft.com/en-us/magazine/cc163688.aspx
 type TransactionLock() =
     let pending = LinkedList<Transaction*ManualResetEvent>()
     let mutable owner : Transaction = null
@@ -19,10 +19,10 @@ type TransactionLock() =
                 if transaction <> null then
                     this.Owner <- transaction
                 Monitor.Exit sync
-            else //Some transaction owns the lock
+            else 
                 if transaction = this.Owner then
                     Monitor.Exit sync
-                else         //Otherwise, need to acquire the transaction lock
+                else         
                     let manualEvent = new ManualResetEvent(false)
                     let pair = (transaction,manualEvent)
                     pending.AddLast pair |> ignore
@@ -32,7 +32,6 @@ type TransactionLock() =
                         lock manualEvent (fun() -> if not manualEvent.SafeWaitHandle.IsClosed then
                                                      manualEvent.Set() |> ignore))
                     Monitor.Exit sync
-                    //Block the transaction or the calling thread
                     manualEvent.WaitOne() |> ignore
                     lock(manualEvent) manualEvent.Close
         member this.Unlock () = 
