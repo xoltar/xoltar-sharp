@@ -125,20 +125,6 @@ module Dictionary =
         let result = d.[1]
         Assert.Equal(5, result)
 
-    [<Fact(Skip = "Demonstrates bug in F# use statement")>]
-    let ``after commit, transaction values persist (using F# 'use' statement)``()= 
-        let d,back = trans()
-        d.[1] <- 2
-        Assert.Null System.Transactions.Transaction.Current
-        use txn = new System.Transactions.TransactionScope() 
-        (
-            d.[1] <- 5
-            txn.Complete()
-        )
-        
-        let result = d.[1]
-        Assert.Equal(5, result)
-        
     [<Fact>]
     let ``after commit, transaction values persist to the backing store``()= 
         let d,back = trans()
