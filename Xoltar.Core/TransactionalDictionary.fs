@@ -34,7 +34,7 @@ type internal TransactionValues<'TKey,'TValue
     let transactionValues = 
         if backingStore.IsReadOnly then
             raise (System.ArgumentException("Source dictionary is ReadOnly"))
-        new Dictionary<'TKey, 'TValue option>()
+        Dictionary<'TKey, 'TValue option>()
 
     //The undo data needed to undo changes if a rollback happens during 
     //a 2-phase commit. Generated during the IEnlistmentNotification.Prepare method.
@@ -67,7 +67,7 @@ type internal TransactionValues<'TKey,'TValue
                  prepared <- true
 
     let current () =
-        let dict = new Dictionary<'TKey, 'TValue>(backingStore)
+        let dict = Dictionary<'TKey, 'TValue>(backingStore)
         update dict |> ignore
         seq { for kv in dict do yield kv }
 
@@ -129,10 +129,10 @@ type internal TransactionValues<'TKey,'TValue
 
         member this.Keys = current() 
                             |> Seq.map (fun kv -> kv.Key) 
-                            |> fun s -> new List<'TKey>(s) :> ICollection<'TKey>
+                            |> fun s -> List<'TKey>(s) :> ICollection<'TKey>
         member this.Values = current() 
                             |> Seq.map (fun kv -> kv.Value) 
-                            |> fun s -> new List<'TValue>(s) :> ICollection<'TValue>
+                            |> fun s -> List<'TValue>(s) :> ICollection<'TValue>
                             
     interface System.Transactions.IEnlistmentNotification
         with
@@ -147,7 +147,10 @@ type internal TransactionValues<'TKey,'TValue
             try 
                 prep()
                 enlistment.Prepared()
-            with e -> enlistment.ForceRollback(e)
+            with e -> 
+                //Prepare should never throw exceptions - if an exception happens, it 
+                //can be passed to enlistment.ForceRollback.
+                enlistment.ForceRollback(e)
         member this.Rollback(enlistment) = 
             for kv in undo do
                 updateWithPair backingStore kv
@@ -172,7 +175,7 @@ type TransactionalDictionary<'TKey, 'TValue
          and 'TValue: equality> 
             (backingStore:IDictionary<'TKey,'TValue>) = 
 
-    let transactions = new Dictionary<Transaction,TransactionValues<'TKey, 'TValue>>()
+    let transactions = Dictionary<Transaction,TransactionValues<'TKey, 'TValue>>()
     let sync = obj()
     let transactionLock = new TransactionLock()
     let getValues txn : IDictionary<'TKey, 'TValue> = 
@@ -203,23 +206,23 @@ type TransactionalDictionary<'TKey, 'TValue
             let tv = getTxnValues() :> IEnumerable<KeyValuePair<'TKey,'TValue>>
             tv.GetEnumerator()
         member this.Clear () =
-            let tv = getTxnValues() :> ICollection<KeyValuePair<'TKey,'TValue>>
+            let tv = getTxnValues()
             tv.Clear()
         member this.Add(kv) = 
-            let tv = getTxnValues() :> ICollection<KeyValuePair<'TKey,'TValue>>
+            let tv = getTxnValues()
             tv.Add(kv)
         member this.Contains(kv) = 
-            let tv = getTxnValues() :> ICollection<KeyValuePair<'TKey,'TValue>>
+            let tv = getTxnValues()
             tv.Contains(kv)
         member this.Remove(kv:KeyValuePair<'TKey,'TValue>) =
-            let tv = getTxnValues() :> ICollection<KeyValuePair<'TKey,'TValue>>
+            let tv = getTxnValues()
             tv.Remove(kv)
         member this.CopyTo(array, arrayIndex) = 
-            let tv = getTxnValues() :> ICollection<KeyValuePair<'TKey,'TValue>>
+            let tv = getTxnValues()
             tv.CopyTo(array, arrayIndex)
         member this.Count 
             with get () = 
-                let tv = getTxnValues() :> ICollection<KeyValuePair<'TKey,'TValue>>
+                let tv = getTxnValues()
                 tv.Count
         member this.IsReadOnly with get ()= false
         member this.Add(key, value) = 
